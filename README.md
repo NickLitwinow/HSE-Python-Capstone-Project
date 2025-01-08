@@ -1,25 +1,4 @@
-Python для инженерии данных: Итоговый проект
-
-Оглавление
-	1.	Введение
-	2.	Требования
-	3.	Структура проекта
-	4.	Установка и запуск
-	5.	Описание компонентов
-	•	PostgreSQL
-	•	MySQL
-	•	Kafka и Zookeeper
-	•	Spark
-	•	Airflow
-	6.	Генерация данных
-	7.	Репликация данных
-	8.	Создание аналитических витрин
-	9.	Дополнительное задание: Стриминг через Kafka
-	10.	Требования к идемпотентности
-	11.	Отладка и устранение неполадок
-	12.	Заключение
-
-Введение
+# Python для инженерии данных: Итоговый проект
 
 Этот проект представляет собой комплексное решение для обработки данных с использованием технологий Python, Airflow, Spark, Kafka, PostgreSQL и MySQL. Цель проекта — продемонстрировать навыки разработки пайплайнов для репликации данных, создания аналитических витрин и обработки стриминговых данных.
 
@@ -35,35 +14,64 @@ Python для инженерии данных: Итоговый проект
 Проект организован следующим образом:
 
 .
+
 ├── docker-compose.yml
+
 ├── README.md
+
 ├── airflow
+
 │   ├── Dockerfile
+
 │   ├── requirements.txt
+
 │   ├── scripts
+
 │   │   └── init_airflow_connections.sh
+
 │   └── dags
+
 │       ├── dag_replication.py
+
 │       ├── dag_kafka_stream.py
+
 │       └── dag_analytics.py
+
 ├── db
+
 │   ├── init_postgres.sql
+
 │   ├── init_mysql.sql
+
 │   └── data_generation_postgres.py
+
 ├── kafka
+
 │   ├── Dockerfile
+
 │   ├── data_generation_kafka.py
+
 │   └── docker-entrypoint.sh
+
 ├── spark
+
 │   ├── master
+
 │   │   └── Dockerfile
+
 │   ├── worker
+
 │   │   └── Dockerfile
+
 │   └── requirements.txt
+
 └── scripts
-    ├── transform_and_load_spark.py
-    ├── kafka_to_postgres.py
-    └── create_analytics_views_spark.py
+
+│   ├── transform_and_load_spark.py
+
+│   ├── kafka_to_postgres.py
+
+│   └── create_analytics_views_spark.py
 
 Установка и запуск
 	1.	Клонируйте репозиторий:
