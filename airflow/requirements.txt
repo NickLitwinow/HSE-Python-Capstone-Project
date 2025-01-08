@@ -1,0 +1,14 @@
+# Зависимости Airflow-провайдеров
+apache-airflow-providers-postgres
+apache-airflow-providers-mysql
+apache-airflow-providers-apache-spark
+apache-airflow-providers-apache-kafka
+
+# Дополнительные пакеты для работы
+psycopg2-binary
+pymysql
+kafka-python
+pyspark
+faker
+shapely
+pyarrow>=10.0.1,<10.1.0
