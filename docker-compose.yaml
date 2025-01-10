@@ -1,0 +1,398 @@
+# Название проекта Docker Compose
+name: hse_python_final
+
+# Определение общих переменных окружения для PostgreSQL
+x-postgresql-connection-env: &pg-connect
+  POSTGRESQL_APP_HOST: ${POSTGRESQL_APP_HOST}
+  POSTGRESQL_APP_DB: ${POSTGRESQL_APP_DB}
+  POSTGRESQL_APP_SCHEMA: ${POSTGRESQL_APP_SCHEMA}
+  POSTGRESQL_APP_USER: ${POSTGRESQL_APP_USER}
+  POSTGRESQL_APP_PASSWORD: ${POSTGRESQL_APP_PASSWORD}
+
+# Определение общих переменных окружения для MySQL
+x-mysql-connection-env: &mysql-connect
+  MYSQL_APP_HOST: ${MYSQL_APP_HOST}
+  MYSQL_APP_DB: ${MYSQL_APP_DB}
+  MYSQL_APP_USER: ${MYSQL_APP_USER}
+  MYSQL_APP_PASSWORD: ${MYSQL_APP_PASSWORD}
+
+# Определение общих переменных окружения для Airflow
+x-airflow-common-env: &airflow-common-env
+  AIRFLOW__CORE__EXECUTOR: ${AIRFLOW__CORE__EXECUTOR}
+  AIRFLOW__CORE__LOAD_EXAMPLES: ${AIRFLOW__CORE__LOAD_EXAMPLES}
+  AIRFLOW__CORE__DAG_CONCURRENCY: ${AIRFLOW__CORE__DAG_CONCURRENCY}
+  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
+  AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: ${AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK}
+  AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW__WEBSERVER__SECRET_KEY}
+  AIRFLOW_UID: ${AIRFLOW_UID}
+  _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME}
+  _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD}
+  SPARK_MASTER_HOST: ${SPARK_MASTER_HOST}
+  SPARK_MASTER_PORT: ${SPARK_MASTER_PORT}
+
+# Определение общих переменных окружения для Spark
+x-spark-common-env: &spark-common-env
+  SPARK_RPC_AUTHENTICATION_ENABLED: ${SPARK_RPC_AUTHENTICATION_ENABLED}
+  SPARK_RPC_ENCRYPTION_ENABLED: ${SPARK_RPC_ENCRYPTION_ENABLED}
+  SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED: ${SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED}
+  SPARK_SSL_ENABLED: ${SPARK_SSL_ENABLED}
+
+# Определение общих переменных окружения для Kafka
+x-kafka-common-env: &kafka-common-env
+  KAFKA_INTERNAL_CONNECT_PATH: ${KAFKA_INTERNAL_CONNECT_PATH}
+  KAFKA_TOPIC_NAME: ${KAFKA_TOPIC_NAME}
+
+# Определение сервисов
+services:
+  # ================================
+  # Секция RDBMS (Системы Управления Реляционными Базами Данных)
+  # ================================
+
+  # Сервис PostgreSQL
+  postgresql:
+    build: setup/db/postgresql
+    container_name: postgresql
+    environment:
+      <<: *pg-connect  # Включение общих переменных окружения для PostgreSQL
+      # Пароль для пользователя root в PostgreSQL
+      POSTGRES_PASSWORD: ${POSTGRESQL_ROOT_PASSWORD}
+    ports:
+      # Проброс порта 5432 контейнера на локальный хост для доступа к базе данных
+      - "5432:5432"
+    volumes:
+      # Монтирование тома для сохранения данных PostgreSQL вне контейнера
+      - postgresql-data:/var/lib/postgres/data
+    healthcheck:
+      # Проверка готовности PostgreSQL сервиса
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s      # Интервал между проверками
+      timeout: 5s       # Время ожидания ответа
+      retries: 5        # Количество попыток проверки перед признанием сервиса неработоспособным
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'   # Ограничение по использованию CPU
+          memory: 512M  # Ограничение по использованию памяти
+
+  # Сервис MySQL
+  mysql:
+    build: setup/db/mysql
+    container_name: mysql
+    environment:
+      <<: *mysql-connect  # Включение общих переменных окружения для MySQL
+      # Пароль для пользователя root в MySQL
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    ports:
+      # Проброс порта 3306 контейнера на локальный хост для доступа к базе данных
+      - "3306:3306"
+    volumes:
+      # Монтирование тома для сохранения данных MySQL вне контейнера
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      # Проверка готовности MySQL сервиса
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # ================================
+  # Секция Месседжинга (Обмен сообщениями между сервисами)
+  # ================================
+
+  # Сервис Zookeeper
+  zookeeper:
+    build: setup/messaging/zookeeper
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: '2181'  # Порт для подключения клиентов к Zookeeper
+    ports:
+      - "2181:2181"  # Проброс порта 2181 на локальный хост
+    healthcheck:
+      # Проверка готовности Zookeeper сервиса
+      test: ["CMD", "echo", "ruok", "|", "nc", "localhost", "2181"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # Сервис Kafka
+  kafka:
+    build: setup/messaging/kafka
+    hostname: kafka
+    container_name: kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy  # Зависимость от успешной проверки готовности Zookeeper
+    ports:
+      - "29092:9092"  # Проброс порта Kafka на локальный хост
+    environment:
+      <<: *kafka-common-env  # Включение общих переменных окружения для Kafka
+      KAFKA_BROKER_ID: ${KAFKA_BROKER_ID}
+      KAFKA_ZOOKEEPER_CONNECT: ${KAFKA_ZOOKEEPER_CONNECT}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: ${KAFKA_LISTENER_SECURITY_PROTOCOL_MAP}
+      KAFKA_ADVERTISED_LISTENERS: ${KAFKA_ADVERTISED_LISTENERS}
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: ${KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR}
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: ${KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS}
+    healthcheck:
+      # Проверка готовности Kafka сервиса
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 5s
+      timeout: 30s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # Сервис инициализации Kafka
+  kafka-init:
+    build: setup/messaging/kafka_init
+    container_name: kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy  # Зависимость от успешной проверки готовности Kafka
+    environment:
+      <<: *kafka-common-env  # Включение общих переменных окружения для Kafka
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # ================================
+  # Секция Apache Spark
+  # ================================
+
+  # Сервис Spark Master
+  spark-master:
+    build: setup/spark/spark-master
+    container_name: spark-master
+    environment:
+      <<: *spark-common-env  # Включение общих переменных окружения для Spark
+      SPARK_MODE: master  # Режим работы Spark – мастер
+      SPARK_MASTER_WEBUI_PORT: 8081  # Порт веб-интерфейса Spark Master
+      SPARK_DRIVER_MEMORY: 2g  # Память, выделенная для драйвера Spark
+      SPARK_EXECUTOR_MEMORY: 2g  # Память, выделенная для исполнителей Spark
+      SPARK_WORKER_CORES: 2  # Количество ядер для каждого воркера Spark
+      SPARK_WORKER_MEMORY: 2g  # Память, выделенная для каждого воркера Spark
+    ports:
+      - "8081:8081"  # Проброс порта веб-интерфейса Spark Master на локальный хост
+    volumes:
+      # Монтирование тома для сохранения данных Spark вне контейнера
+      - spark-data:/bitnami
+    healthcheck:
+      # Проверка готовности Spark Master сервиса
+      test: ["CMD-SHELL", "curl -f http://localhost:8081"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+
+  # Сервисы Spark Workers
+  spark-worker1:
+    build: setup/spark/spark-worker
+    container_name: spark-worker1
+    environment:
+      <<: *spark-common-env  # Включение общих переменных окружения для Spark
+      SPARK_MODE: worker  # Режим работы Spark – воркер
+      SPARK_MASTER_URL: spark://${SPARK_MASTER_HOST}:${SPARK_MASTER_PORT}  # URL для подключения к Spark Master
+      SPARK_DRIVER_MEMORY: 2g
+      SPARK_EXECUTOR_MEMORY: 2g
+      SPARK_WORKER_CORES: 2
+      SPARK_WORKER_MEMORY: 2g
+    volumes:
+      - spark-data:/bitnami
+    depends_on:
+      spark-master:
+        condition: service_healthy  # Зависимость от успешной проверки готовности Spark Master
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+
+  spark-worker2:
+    build: setup/spark/spark-worker
+    container_name: spark-worker2
+    environment:
+      <<: *spark-common-env
+      SPARK_MODE: worker
+      SPARK_MASTER_URL: spark://${SPARK_MASTER_HOST}:${SPARK_MASTER_PORT}
+      SPARK_DRIVER_MEMORY: 2g
+      SPARK_EXECUTOR_MEMORY: 2g
+      SPARK_WORKER_CORES: 2
+      SPARK_WORKER_MEMORY: 2g
+    volumes:
+      - spark-data:/bitnami
+    depends_on:
+      spark-master:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+
+  spark-worker3:
+    build: setup/spark/spark-worker
+    container_name: spark-worker3
+    environment:
+      <<: *spark-common-env
+      SPARK_MODE: worker
+      SPARK_MASTER_URL: spark://${SPARK_MASTER_HOST}:${SPARK_MASTER_PORT}
+      SPARK_DRIVER_MEMORY: 2g
+      SPARK_EXECUTOR_MEMORY: 2g
+      SPARK_WORKER_CORES: 2
+      SPARK_WORKER_MEMORY: 2g
+    volumes:
+      - spark-data:/bitnami
+    depends_on:
+      spark-master:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+
+  # ================================
+  # Секция Генерации Данных (Datagen)
+  # ================================
+
+  # Сервис генерации данных для PostgreSQL
+  pg-datagen:
+    build: setup/datagen/pg_datagen
+    container_name: pg-datagen
+    depends_on:
+      postgresql:
+        condition: service_healthy  # Зависимость от успешной проверки готовности PostgreSQL
+    environment:
+      << : *pg-connect  # Включение общих переменных окружения для PostgreSQL
+      # Параметры генерации данных
+      PG_DATAGEN_NUM_USERS: ${PG_DATAGEN_NUM_USERS}
+      PG_DATAGEN_NUM_PRODUCTS: ${PG_DATAGEN_NUM_PRODUCTS}
+      PG_DATAGEN_NUM_ORDERS: ${PG_DATAGEN_NUM_ORDERS}
+      PG_DATAGEN_NUM_ORDER_DETAILS_MIN: ${PG_DATAGEN_NUM_ORDER_DETAILS_MIN}
+      PG_DATAGEN_NUM_ORDER_DETAILS_MAX: ${PG_DATAGEN_NUM_ORDER_DETAILS_MAX}
+      PG_DATAGEN_NUM_REVIEWS: ${PG_DATAGEN_NUM_REVIEWS}
+      PG_DATAGEN_NUM_LOYALTY_POINTS: ${PG_DATAGEN_NUM_LOYALTY_POINTS}
+    volumes:
+      # Монтирование директории с кодом генерации данных в контейнер
+      - ./code/datagen/datagen_postgres:/app/src
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # Сервис генерации данных для Kafka
+  kafka-datagen:
+    build: setup/datagen/kafka_datagen
+    container_name: kafka-datagen
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully  # Зависимость от успешного завершения kafka-init
+    environment:
+      << : *kafka-common-env  # Включение общих переменных окружения для Kafka
+      # Параметры генерации данных
+      KAFKA_DATAGEN_PERIOD_SECS: ${KAFKA_DATAGEN_PERIOD_SECS}
+    volumes:
+      - ./code/datagen/kafka_datagen:/app/src
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # ================================
+  # Секция Apache Airflow
+  # ================================
+
+  # Сервис инициализации Airflow
+  airflow-init:
+    build: setup/airflow/init
+    container_name: airflow-init
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      spark-master:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      pg-datagen:
+        condition: service_completed_successfully
+    environment:
+      <<: [*airflow-common-env, *pg-connect, *mysql-connect]  # Включение общих переменных окружения для Airflow, PostgreSQL и MySQL
+    volumes:
+      # Монтирование директорий с DAG'ами и скриптами в контейнер
+      - ./code/airflow/dags:/opt/airflow/dags
+      - ./code/airflow/scripts:/opt/airflow/scripts
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # Сервис планировщика Airflow
+  airflow-scheduler:
+    build: setup/airflow/scheduler
+    container_name: airflow-scheduler
+    environment:
+      <<: [*airflow-common-env, *kafka-common-env]  # Включение общих переменных окружения для Airflow и Kafka
+    restart: always  # Автоматический перезапуск контейнера в случае сбоя
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully  # Зависимость от успешной инициализации Airflow
+    volumes:
+      - ./code/airflow/dags:/opt/airflow/dags
+      - ./code/airflow/scripts:/opt/airflow/scripts
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+
+  # Сервис веб-сервера Airflow
+  airflow-webserver:
+    build: setup/airflow/webserver
+    container_name: airflow-webserver
+    environment:
+      <<: *airflow-common-env  # Включение общих переменных окружения для Airflow
+    ports:
+      - "8079:8080"  # Проброс порта веб-сервера Airflow на локальный хост
+    restart: always
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully  # Зависимость от успешной инициализации Airflow
+    volumes:
+      - ./code/airflow/dags:/opt/airflow/dags
+      - ./code/airflow/scripts:/opt/airflow/scripts
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+
+# Определение томов для сохранения данных вне контейнеров
+volumes:
+  postgresql-data:
+  mysql-data:
+  spark-data:
