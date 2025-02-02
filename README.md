@@ -1,267 +1,265 @@
-# Итоговый проект по Python
+# Final Python Project
 
-### Стек
-- **Airflow**: Оркестрация.
-- **Spark**: Обработка данных.
-- **PostgreSQL** и **MySQL**: Реляционные базы данных.
-- **Kafka**: Брокер сообщений.
-- **Python**: Генераторы данных для PostgreSQL и Kafka.
-- **Docker**: Контейнеризация сервисов.
+This project is a complete data engineering and analytics solution that integrates multiple modern technologies to automate data ingestion, processing, replication, and analytics. The system leverages containerization and orchestration to seamlessly manage complex data pipelines.
 
-## Автоматизация
+## Table of Contents
 
-Система состоит из 14 контейнеров:
-1. PostgreSQL
-2. MySQL
-3. Spark Master
-4. Spark Worker 1,2,3
-5. Генератор данных для PostgreSQL (`pg_datagen`)
-6. Генератор данных для Kafka (`kafka_datagen`)
-7. Kafka Init
-8. Kafka
-9. Zookeeper
-10. Airflow Init
-11. Airflow Scheduler
-12. Airflow Webserver
+- [Technology Stack](#technology-stack)
+- [Automation and Containers](#automation-and-containers)
+- [Database Entities](#database-entities)
+- [Service Configuration and Access](#service-configuration-and-access)
+- [Data Generation Parameters](#data-generation-parameters)
+- [Data Replication and Streaming](#data-replication-and-streaming)
+- [Analytical Data Marts](#analytical-data-marts)
+- [Project Structure](#project-structure)
+- [Deployment](#deployment)
+- [Usage](#usage)
+- [License](#license)
 
-Все контейнеры основаны на открытых Docker Image. Они автоматически настраиваются и проверяют свою готовность с использованием Healthcheck. Система обеспечена скриптами для автоматической генерации данных, их репликации, стриминга и создания аналитических витрин.
+## Technology Stack
 
-### Сущности базы данных
+- **Airflow**: Orchestrates ETL jobs, replication, and streaming pipelines.
+- **Spark**: Processes and aggregates data.
+- **PostgreSQL** and **MySQL**: Serve as relational databases for storing source and processed data.
+- **Kafka**: Acts as the messaging broker for real-time event streaming.
+- **Python**: Used for data generation scripts for PostgreSQL and Kafka.
+- **Docker**: Containerizes all services to simplify deployment and scalability.
 
-- **users**: Информация о пользователях.
-  - `user_id` (PK): Уникальный идентификатор пользователя.
-  - `first_name`: Имя пользователя.
-  - `last_name`: Фамилия пользователя.
-  - `email`: Электронная почта (уникальное значение).
-  - `phone`: Номер телефона.
-  - `registration_date`: Дата регистрации.
-  - `loyalty_status`: Статус лояльности (`Gold`, `Silver`, `Bronze`).
+## Automation and Containers
 
-- **productcategories**: Иерархия категорий товаров.
-  - `category_id` (PK): Уникальный идентификатор категории.
-  - `name`: Название категории.
-  - `parent_category_id` (FK): Ссылка на родительскую категорию.
+The system consists of 14 Docker containers:
+1. **PostgreSQL** – Primary database.
+2. **MySQL** – Secondary database.
+3. **Spark Master** – Central coordinator for Spark jobs.
+4. **Spark Workers (3 instances)** – Execute Spark tasks.
+5. **PostgreSQL Data Generator (`pg_datagen`)** – Generates synthetic data for PostgreSQL.
+6. **Kafka Data Generator (`kafka_datagen`)** – Generates JSON events for Kafka.
+7. **Kafka Init** – Initializes Kafka topics.
+8. **Kafka** – Messaging broker.
+9. **Zookeeper** – Manages Kafka cluster coordination.
+10. **Airflow Init** – Sets up initial Airflow configuration.
+11. **Airflow Scheduler** – Schedules DAG runs.
+12. **Airflow Webserver** – Provides the UI for managing workflows.
 
-- **products**: Информация о товарах.
-  - `product_id` (PK): Уникальный идентификатор товара.
-  - `name`: Название товара.
-  - `description`: Описание товара.
-  - `category_id` (FK): Категория товара.
-  - `price`: Цена товара.
-  - `stock_quantity`: Количество товара на складе.
-  - `creation_date`: Дата добавления товара.
+All containers are based on open-source Docker images, automatically configured via a centralized `.env` file that defines login credentials, ports, data generation settings, and other configuration parameters. Healthchecks ensure that each container is properly initialized before starting dependent services.
 
-- **orders**: Информация о заказах.
-  - `order_id` (PK): Уникальный идентификатор заказа.
-  - `user_id` (FK): Пользователь, сделавший заказ.
-  - `order_date`: Дата заказа.
-  - `total_amount`: Общая сумма заказа.
-  - `status`: Статус заказа (`Pending`, `Completed`, и т.д.).
-  - `delivery_date`: Дата доставки.
+## Database Entities
 
-- **orderdetails**: Детали заказов.
-  - `order_detail_id` (PK): Уникальный идентификатор детали заказа.
-  - `order_id` (FK): Ссылка на заказ.
-  - `product_id` (FK): Ссылка на товар.
-  - `quantity`: Количество товаров в заказе.
-  - `price_per_unit`: Цена за единицу товара.
-  - `total_price`: Общая стоимость позиции.
+### Users
+- **user_id (PK)**: Unique user identifier.
+- **first_name**: User's first name.
+- **last_name**: User's last name.
+- **email**: Email address (unique).
+- **phone**: Phone number.
+- **registration_date**: Registration date.
+- **loyalty_status**: Loyalty tier (`Gold`, `Silver`, `Bronze`).
 
-- **reviews**: Отзывы о товарах.
-  - `review_id` (PK): Уникальный идентификатор отзыва.
-  - `user_id` (FK): Пользователь, оставивший отзыв.
-  - `product_id` (FK): Продукт, на который оставлен отзыв.
-  - `rating`: Оценка товара (от 1 до 5).
-  - `review_text`: Текст отзыва.
-  - `created_at`: Дата создания отзыва.
+### Product Categories
+- **category_id (PK)**: Unique category identifier.
+- **name**: Category name.
+- **parent_category_id (FK)**: Parent category reference.
 
-- **loyaltyPoints**: Система лояльности.
-  - `loyalty_id` (PK): Уникальный идентификатор записи.
-  - `user_id` (FK): Пользователь, получивший бонусные баллы.
-  - `points`: Количество начисленных баллов.
-  - `reason`: Причина начисления (например, "Order", "Promotion").
-  - `created_at`: Дата начисления.
+### Products
+- **product_id (PK)**: Unique product identifier.
+- **name**: Product name.
+- **description**: Product description.
+- **category_id (FK)**: Product category.
+- **price**: Product price.
+- **stock_quantity**: Quantity available in stock.
+- **creation_date**: Date the product was added.
 
-## Сервисы и их конфигурация
+### Orders
+- **order_id (PK)**: Unique order identifier.
+- **user_id (FK)**: User who placed the order.
+- **order_date**: Order date.
+- **total_amount**: Total order value.
+- **status**: Order status (e.g., `Pending`, `Completed`).
+- **delivery_date**: Delivery date.
 
-### Управление конфигурацией
-Вся конфигурация проекта управляется через единый файл `.env`, который содержит параметры для всех сервисов, включая логины, пароли, порты и настройки генерации данных.
+### Order Details
+- **order_detail_id (PK)**: Unique identifier for order details.
+- **order_id (FK)**: Reference to the order.
+- **product_id (FK)**: Reference to the product.
+- **quantity**: Number of units ordered.
+- **price_per_unit**: Price per unit.
+- **total_price**: Total price for the line item.
 
-### Доступы к данным и UI сервисов
+### Reviews
+- **review_id (PK)**: Unique review identifier.
+- **user_id (FK)**: User who wrote the review.
+- **product_id (FK)**: Product reviewed.
+- **rating**: Product rating (1 to 5).
+- **review_text**: Review text.
+- **created_at**: Date of review.
+
+### Loyalty Points
+- **loyalty_id (PK)**: Unique loyalty record identifier.
+- **user_id (FK)**: User receiving points.
+- **points**: Number of points awarded.
+- **reason**: Reason for points (e.g., "Order", "Promotion").
+- **created_at**: Date points were awarded.
+
+## Service Configuration and Access
+
+All configuration is managed via a single `.env` file containing parameters for all services, including credentials, ports, and data generation settings.
+
+### Access Details
 
 #### PostgreSQL
 - **URL**: `jdbc:postgresql://localhost:5432/postgres_db?currentSchema=source`
-- **Логин**: `db_user`
-- **Пароль**: `qwerty`
+- **Username**: `db_user`
+- **Password**: `qwerty`
 
 #### MySQL
 - **URL**: `jdbc:mysql://localhost:3306/mysql_db`
-- **Логин**: `db_user`
-- **Пароль**: `qwerty`
+- **Username**: `db_user`
+- **Password**: `qwerty`
 
 #### Airflow Web UI
 - **URL**: `http://localhost:8080`
-- **Логин**: `admin`
-- **Пароль**: `admin`
+- **Username**: `admin`
+- **Password**: `admin`
 
 #### Spark Master
 - **URL**: `http://localhost:8081`
 
 #### Kafka
 - **Bootstrap Servers**: `localhost:9092`
-- **Топик**: `users-data`
+- **Topic**: `users-data`
 
-### Генерация данных
+## Data Generation Parameters
 
-**Параметры генерации для PostgreSQL по умолчанию:**
-- Количество пользователей: 500
-- Количество товаров: 800
-- Количество заказов: 3000
-- Детали заказов: от 1 до 10 на заказ
-- Категории товаров: 20
-- Отзывов о товарах: 2000
-- Начислений бонусов: 3000
+**PostgreSQL Data Generator (default settings):**
+- Users: 500
+- Products: 800
+- Orders: 3000
+- Order Details: 1 to 10 items per order
+- Product Categories: 20
+- Product Reviews: 2000
+- Loyalty Points: 3000
 
-**Параметры генерации для Kafka по умолчанию:**
-- Интервал генерации событий: 5 секунд
-- Топик Kafka: `users-data`
-- События генерируются в формате JSON с полями: `first_name`, `last_name`, `email`, `phone`, `registration_date`, `loyalty_status`.
+**Kafka Data Generator (default settings):**
+- Event Generation Interval: 5 seconds
+- Kafka Topic: `users-data`
+- Event Format: JSON with fields such as `first_name`, `last_name`, `email`, `phone`, `registration_date`, and `loyalty_status`.
 
-## Репликация данных
+## Data Replication and Streaming
 
-В Airflow реализована репликация данных из PostgreSQL в MySQL. DAG выполняет следующие задачи:
-1. Извлечение данных из PostgreSQL.
-2. Трансформация данных через Spark.
-3. Сохранение данных в MySQL.
+### Replication Pipeline
 
-### Скрипт репликации
+Airflow orchestrates data replication from PostgreSQL to MySQL. The replication DAG performs the following tasks:
+1. Extract data from PostgreSQL.
+2. Transform the data using Spark.
+3. Load the transformed data into MySQL.
 
-- **Путь к DAG**: `code/airflow/dags/replicate_postgres_to_mysql.py`
-- **Описание**: DAG, который использует `SparkSubmitOperator` для запуска Spark-скрипта репликации таблиц из PostgreSQL в MySQL.
+- **DAG Path**: `code/airflow/dags/replicate_postgres_to_mysql.py`
 
-## Стриминг данных
+### Streaming Pipeline
 
-В Airflow реализована обработка данных из Kafka. DAG выполняет следующие задачи:
-1. Получение данных из топика Kafka.
-2. Обработка данных с использованием Spark.
-3. Сохранение данных в PostgreSQL.
+Airflow also manages streaming data from Kafka into PostgreSQL. The streaming DAG executes the following:
+1. Retrieve data from the Kafka topic.
+2. Process the data using Spark.
+3. Save the processed data to PostgreSQL.
 
-### Скрипт стриминга
+- **DAG Path**: `code/airflow/dags/kafka_to_postgres_streaming.py`
 
-- **Путь к DAG**: `code/airflow/dags/kafka_to_postgres_streaming.py`
-- **Описание**: DAG, который использует `SparkSubmitOperator` для запуска Spark-скрипта стриминга данных из Kafka в PostgreSQL.
+## Analytical Data Marts
 
-## Аналитические витрины
+### User Activity Mart (`mart_user_activity`)
 
-### Витрина активности пользователей (`mart_user_activity`)
+**Description:**  
+Provides an analysis of user behavior by summarizing order counts and total spend, segmented by order status.
 
-#### Описание
-Витрина для последующего анализа поведения пользователей - количества заказов и общей суммы затрат, разбитых по статусам заказов.
+| Field        | Description                   |
+|--------------|-------------------------------|
+| user_id      | User identifier               |
+| first_name   | User's first name             |
+| last_name    | User's last name              |
+| status       | Order status                  |
+| order_count  | Number of orders              |
+| total_spent  | Total amount spent            |
 
-#### Поля и их описание
+### Product Rating Mart (`mart_product_rating`)
 
-| Поле        | Описание                   |
-|-------------|----------------------------|
-| user_id     | Идентификатор пользователя |
-| first_name  | Имя пользователя           |
-| last_name   | Фамилия пользователя       |
-| status      | Статус заказа              |
-| order_count | Количество заказов         |
-| total_spent | Общая сумма затрат         |
+**Description:**  
+Analyzes product ratings to understand product popularity and customer satisfaction.
 
-### Витрина рейтинга продуктов (`mart_product_rating`)
+| Field      | Description            |
+|------------|------------------------|
+| product_id | Product identifier     |
+| name       | Product name           |
+| rating     | Average product rating |
 
-#### Описание
-Витрина для последующего анализа рейтинга товаров. Может быть использована, например, для исследования популярности товаров и их соответствия ожиданиям клиентов.
+### Loyalty Points Mart (`mart_user_loyalty_points`)
 
-#### Поля и их описание
+**Description:**  
+Analyzes user loyalty based on the accumulation of bonus points.
 
-| Поле   | Описание        |
-|--------|-----------------|
-| product_id | Идентификатор товара |
-| name       | Название товара      |
-| rating     | Средний рейтинг      |
+| Field                | Description                      |
+|----------------------|----------------------------------|
+| user_id              | User identifier                  |
+| first_name           | User's first name                |
+| last_name            | User's last name                 |
+| loyalty_status       | Loyalty tier                     |
+| total_loyalty_points | Total bonus points accumulated   |
 
-### Витрина бонусных баллов (`mart_user_loyalty_points`)
+### Average Check Mart (`mart_average_check`)
 
-#### Описание
-Витрина для последующего анализа пользователей по количеству бонусных баллов. Может быть использована, например, для исследования групп пользователей в рамках бонусной системы.
+**Description:**  
+Provides insights into average order values segmented by order status and user loyalty.
 
-#### Поля и их описание
+| Field           | Description                                  |
+|-----------------|----------------------------------------------|
+| status          | Order status                                 |
+| loyalty_status  | User's loyalty tier                          |
+| average_check   | Average order value for the segment          |
 
-| Поле                 | Описание                    |
-|----------------------|-----------------------------|
-| user_id              | Идентификатор пользователя  |
-| first_name           | Имя пользователя            |
-| last_name            | Фамилия пользователя        |
-| loyalty_status       | Уровень бонусной системы    |
-| total_loyalty_points | Количество бонусных баллов  |
+**Data Mart Creation Process:**
+1. Load raw data from PostgreSQL and MySQL.
+2. Perform necessary transformations (joins, aggregations, groupings).
+3. Save the resulting mart back to the target database.
 
-### Витрина средних чеков (`mart_average_check`)
+## Deployment
 
-#### Описание
-Витрина для последующего анализа средних чеков с разбивкой по статусу заказа и статусу лояльности. Может быть использована, например, для оценки эффективности маркетинговых стратегий и программ лояльности, или для настройки акций и предложений для разных групп клиентов.
+To deploy the project, run the following command:
 
-#### Поля и их описание
+```bash
+docker compose up --build -d
 
-| Поле           | Описание                                 |
-|----------------|------------------------------------------|
-| status         | Статус заказа                            |
-| loyalty_status | Статус лояльности пользователя           |
-| average_check  | Средний чек для группы заказов           |
+After deployment, simply unpause the DAGs in the Airflow UI to start the replication and streaming pipelines.
 
-### Скрипты для витрин
-
-Для создания витрин используются Spark-скрипты. Скрипты загружают данные из MySQL и PostgreSQL, выполняют агрегации и сохраняют результаты обратно в базу данных. Шаги:
-1. Загрузка исходных данных из базы данных.
-2. Выполнение трансформаций (объединения, группировки, агрегации и т.д.).
-3. Сохранение результирующих витрин в целевую базу данных.
-
-## Запуск
-
-1. Запустить команду:
-    ```bash
-    docker compose up --build -d
-    ```
-2. После сборки проекта и его развертывания будут доступны интерфейсы PostgreSQL, MySQL, Airflow, Kafka и Spark по указанным выше URL.
-3. Все, что остается сделать вручную после окончания деплоя — включить (перевести в `unpaused`) DAG в UI Airflow.
-
-## Структура проекта
-
-Проект организован следующим образом:
-```plaintext
 DE2024_PY_CourseWork/
-├── .env                # Переменные окружения для настройки всех сервисов
-├── docker-compose.yml  # Конфигурация Docker Compose
-├── setup/              # Инфраструктура контейнеров (ранее "infra")
-│   ├── airflow/        # Конфигурация Airflow
+├── .env                # Environment variables for all services
+├── docker-compose.yml  # Docker Compose configuration
+├── setup/              # Container infrastructure configuration
+│   ├── airflow/        # Airflow configuration
 │   │   ├── init/       
 │   │   ├── scheduler/  
 │   │   └── webserver/  
-│   ├── datagen/        # Конфигурация для генераторов данных
+│   ├── datagen/        # Data generator configurations
 │   │   ├── pg_datagen/
 │   │   └── kafka_datagen/
-│   ├── db/             # Конфигурация СУБД
+│   ├── db/             # Database configurations
 │   │   ├── mysql/     
 │   │   └── postgresql/
-│   ├── messaging/      # Конфигурация ZK&Kafka
+│   ├── messaging/      # Zookeeper & Kafka configurations
 │   │   ├── kafka/
 │   │   ├── kafka_init/
 │   │   └── zookeeper/
-│   └── spark/          # Конфигурация Spark
+│   └── spark/          # Spark configurations
 │       ├── spark-master/
 │       └── spark-worker/
-├── code/               # Исходный код
-│   ├── airflow/        # DAG и скрипты для Airflow
+├── code/               # Source code
+│   ├── airflow/        # Airflow DAGs and scripts
 │   │   ├── dags/       
 │   │   └── scripts/    
 │   │       ├── helpers/        
 │   │       └── pyspark_scripts/ 
-│   ├── datagen/        # Генераторы данных
-│   │   ├── datagen_postgres/ # Скрипты для генерации данных в PG
-│   │   └── kafka_datagen/ # Скрипты для генерации данных в Kafka
-│   └── scripts/        # Дополнительные скрипты
-├── postgresdb/         # Модели и схемы для PostgreSQL
+│   ├── datagen/        # Data generator scripts
+│   │   ├── datagen_postgres/ 
+│   │   └── kafka_datagen/    
+│   └── scripts/        # Additional scripts
+├── postgresdb/         # PostgreSQL models and schemas
 │   ├── models.py
 │   ├── schemas/
 │   │   ├── loyalty_schema.py
@@ -272,4 +270,4 @@ DE2024_PY_CourseWork/
 │   │   ├── order_schema.py
 │   │   └── order_detail_schema.py
 │   └── db_config.py
-└── README.md           # Текущий файл документации
+└── README.md           # This documentation file
