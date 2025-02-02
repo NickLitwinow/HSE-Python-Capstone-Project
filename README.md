@@ -1,8 +1,6 @@
 # Final Python Project
 
-<div align="center">
-  ![hse_python_capstone_project](https://github.com/user-attachments/assets/c050980d-4c70-47e6-bafe-d05ae55eeab6)
-</div>
+![hse_python_capstone_project](https://github.com/user-attachments/assets/c050980d-4c70-47e6-bafe-d05ae55eeab6)
 
 This project is a complete data engineering and analytics solution that integrates multiple modern technologies to automate data ingestion, processing, replication, and analytics. The system leverages containerization and orchestration to seamlessly manage complex data pipelines.
 
